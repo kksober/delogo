@@ -23,7 +23,9 @@ def _imwrite(path, img):
 
 def build_watermark_mask(img):
     h, w = img.shape[:2]
-    rx, ry = max(0, w - 260), max(0, h - 90)
+    roi_w = max(180, int(w * 0.22))
+    roi_h = max(60, int(h * 0.08))
+    rx, ry = max(0, w - roi_w), max(0, h - roi_h)
     roi = img[ry:h, rx:w]
     rh, rw = roi.shape[:2]
 
@@ -65,10 +67,11 @@ def build_watermark_mask(img):
     final = cv2.morphologyEx(final, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
     final = cv2.morphologyEx(final, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
 
-    # 去小噪点
+    # 去小噪点 (最小面积按图片尺寸缩放)
+    min_area = max(20, int((w * h) / 55000))
     n, labels, stats, _ = cv2.connectedComponentsWithStats(final, 8)
     for i in range(1, n):
-        if stats[i, cv2.CC_STAT_AREA] < 30:
+        if stats[i, cv2.CC_STAT_AREA] < min_area:
             final[labels == i] = 0
 
     # 放入全图 + 羽化
@@ -96,6 +99,7 @@ def remove_watermark(input_path, output_path=None):
         _imwrite(output_path, img)
         return True, f"未检测到明显水印 ({px} px), 已复制原图"
 
-    result = cv2.inpaint(img, mask, inpaintRadius=5, flags=cv2.INPAINT_TELEA)
+    radius = max(3, min(10, int(min(img.shape[0], img.shape[1]) / 256)))
+    result = cv2.inpaint(img, mask, inpaintRadius=radius, flags=cv2.INPAINT_TELEA)
     _imwrite(output_path, result)
     return True, f"去水印完成 ({px} px)"
